@@ -193,7 +193,7 @@ def main():
     print(f"{len(cardinais_flat)} pontos cardeais armazenados "
           f"({len(cardinais_por_circulo)} círculos × 4 pontos cada).")
 
-    plot_map_and_points(BOUNDS, INICIO, FIM, "Mapa: pontos, obstáculos e cardinais (armazenados)")
+    plot_map_and_points(BOUNDS, INICIO, FIM, "Mapa: pontos, obstáculos e cardinais")
     plot_obstacles(centers, RADIUS)
     plot_pontos_cardeais_from_list(cardinais_flat)
     plt.show()
