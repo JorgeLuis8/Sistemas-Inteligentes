@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 # ======================= Configurações do mapa e obstáculos =======================
 
 # Limites do mapa (min_x, max_x, min_y, max_y)
-BOUNDS = (0, 100, 0, 100)
+BOUNDS = (0, 100, 0, 60)
 
 # Obstáculos
-NUM_OBS = 100
+NUM_OBS = 10
 RADIUS  = 3
 
 # Distância mínima dos pontos Início/Fim em relação à borda do obstáculo
@@ -98,6 +98,7 @@ def pontos_cardeais(center, r):
     direita  = (cx + r, cy)
     baixo    = (cx, cy - r)
     esquerda = (cx - r, cy)
+    print(f"Cardeais para {center}: {cima}, {direita}, {baixo}, {esquerda}")
     return {"cima": cima, "direita": direita, "baixo": baixo, "esquerda": esquerda}
 
 
@@ -112,7 +113,7 @@ def plot_map_and_points(bounds, inicio, fim, title):
     ax.set_xlim(min_x, max_x)
     ax.set_ylim(min_y, max_y)
     ax.set_aspect('equal', adjustable='box')
-    ax.grid(True)
+    ax.grid(False)
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
 
