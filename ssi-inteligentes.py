@@ -96,12 +96,7 @@ def pontos_cardeais(center, r):
     return {"cima": cima, "direita": direita, "baixo": baixo, "esquerda": esquerda}
 
 def generate_cardinal_points(centers, r):
-    """
-    Gera e ARMAZENA os pontos cardeais de cada círculo.
-    Retorna:
-      - cardinais_por_circulo: [{'idx': i, 'center': (x,y), 'pts': {'cima':(...), ...}}, ...]
-      - cardinais_flat: [(x,y), (x,y), ...]  # lista “achatada”
-    """
+
     cardinais_por_circulo = []
     cardinais_flat = []
     for i, c in enumerate(centers):
@@ -134,13 +129,11 @@ def plot_map_and_points(bounds, inicio, fim, title):
     plt.tight_layout()
 
 def plot_obstacles(centers, r):
-    """Desenha os obstáculos circulares."""
     ax = plt.gca()
     for c in centers:
         ax.add_patch(plt.Circle(c, r, fill=False))
 
 def plot_pontos_cardeais_from_list(cardinais_flat):
-    """Plota os pontos cardeais armazenados (lista achatada)."""
     ax = plt.gca()
 
     proxy = plt.Line2D([0], [0], marker='o', color='tab:blue',
@@ -159,7 +152,6 @@ def plot_pontos_cardeais_from_list(cardinais_flat):
 EPS = 1e-9
 
 def closest_param_t_on_segment(p, a, b):
-    """Retorna t em [0,1] tal que a + t*(b-a) é o ponto do segmento AB mais próximo de P."""
     ax, ay = a; bx, by = b; px, py = p
     vx, vy = (bx - ax), (by - ay)
     wx, wy = (px - ax), (py - ay)
@@ -172,7 +164,6 @@ def closest_param_t_on_segment(p, a, b):
     return t
 
 def dist_point_to_segment(p, a, b):
-    """Distância do ponto P ao segmento AB e o parâmetro t do ponto mais próximo."""
     t = closest_param_t_on_segment(p, a, b)
     cx = a[0] + t*(b[0]-a[0])
     cy = a[1] + t*(b[1]-a[1])
@@ -181,11 +172,7 @@ def dist_point_to_segment(p, a, b):
 def segment_intersects_circle(a, b, center, r, *,
                               allow_touch_at_endpoint_for=None,
                               tol=1e-7):
-    """
-    True se o segmento AB invade a área do círculo (dist < r) ou encosta (dist == r)
-    em ponto INTERNO do segmento (0<t<1). Encostar no endpoint é permitido SOMENTE
-    quando esse endpoint pertence ao círculo 'allow_touch_at_endpoint_for' (índice).
-    """
+   
     d, t = dist_point_to_segment(center, a, b)
 
     # Interseção 'dura' (atravessa interior)
@@ -219,22 +206,9 @@ def segment_intersects_circle(a, b, center, r, *,
 # ======================= Construção do grafo de visibilidade =======================
 
 def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circulo, cardinais_flat):
-    """
-    Retorna:
-      - vertices: [(x,y), ...]  (start, goal e cardinais)
-      - owners:   [None|-1|idx_circulo, ...]  (dono de cada vértice; None para start/goal)
-      - edges:    [(i,j), ...] pares de índices de vertices com aresta válida
-
-    Regras:
-      - Proíbe ligar dois pontos do MESMO círculo (o segmento seria um acorde que atravessa o interior).
-      - Proíbe atravessar qualquer círculo.
-      - Permite tocar o círculo apenas no endpoint que pertence a ele (o próprio ponto cardeal).
-    """
-    # Monta lista de vértices e "donos"
     vertices = [inicio, fim] + list(cardinais_flat)
-    owners = [None, None]    # start e goal não pertencem a círculo
+    owners = [None, None]
 
-    # Mapa rápido de ponto -> índice do círculo dono
     owner_map = {}
     for item in cardinais_por_circulo:
         ci = item['idx']
@@ -245,18 +219,21 @@ def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circul
         owners.append(owner_map.get(pt, None))
 
     n = len(vertices)
-    edges = []
+    edges = []              # só válidas
+    total_candidates = 0    # todas, válidas ou não
 
     for i in range(n):
         for j in range(i+1, n):
             a = vertices[i]; b = vertices[j]
             owner_i = owners[i]; owner_j = owners[j]
 
-            # 1) Evita ligar dois pontos do MESMO círculo
+            # 1) Mesmo círculo (já é inválida)
             if (owner_i is not None) and (owner_i == owner_j):
+                total_candidates += 1
                 continue
 
-            # 2) Checa interseção com todos os círculos
+            # 2) Conta como candidata e verifica interseções
+            total_candidates += 1
             ok = True
             for k, c in enumerate(centers):
                 allow = {
@@ -271,7 +248,10 @@ def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circul
             if ok:
                 edges.append((i, j))
 
+    print(f"Arestas candidatas (todas): {total_candidates}")
+    print(f"Arestas válidas: {len(edges)}")
     return vertices, owners, edges
+
 
 
 # ======================= Plot das arestas =======================
