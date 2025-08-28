@@ -1,6 +1,7 @@
 import random
 import math
 import matplotlib.pyplot as plt
+from collections import deque
 
 
 # ======================= Configurações do mapa e obstáculos =======================
@@ -16,7 +17,7 @@ RADIUS  = 3
 MARGIN_FROM_POINTS = 6.0
 
 # Configurações de espaçamento
-BORDER_GAP = 1.0   # folga extra entre obstáculo e borda do mapa (além de RADIUS)
+border_GAP = 1.0   # folga extra entre obstáculo e borda do mapa (além de RADIUS)
 
 # Tentativas máximas de geração
 MAX_TRIES = 50_000
@@ -67,7 +68,7 @@ def generate_random_centers(n, r, bounds, inicio, fim,
     lo_x = min_x + r + border_gap
     hi_x = max_x - r - border_gap
     lo_y = min_y + r + border_gap
-    hi_y = max_y - r - border_gap
+    hi_y = max_y - r + border_gap
 
     if lo_x > hi_x or lo_y > hi_y:
         raise ValueError("Mapa pequeno demais para o raio/gaps escolhidos.")
@@ -96,7 +97,12 @@ def pontos_cardeais(center, r):
     return {"cima": cima, "direita": direita, "baixo": baixo, "esquerda": esquerda}
 
 def generate_cardinal_points(centers, r):
-
+    """
+    Gera e ARMAZENA os pontos cardeais de cada círculo.
+    Retorna:
+      - cardinais_por_circulo: [{'idx': i, 'center': (x,y), 'pts': {'cima':(...), ...}}, ...]
+      - cardinais_flat: [(x,y), (x,y), ...]  # lista “achatada”
+    """
     cardinais_por_circulo = []
     cardinais_flat = []
     for i, c in enumerate(centers):
@@ -129,11 +135,13 @@ def plot_map_and_points(bounds, inicio, fim, title):
     plt.tight_layout()
 
 def plot_obstacles(centers, r):
+    """Desenha os obstáculos circulares."""
     ax = plt.gca()
     for c in centers:
         ax.add_patch(plt.Circle(c, r, fill=False))
 
 def plot_pontos_cardeais_from_list(cardinais_flat):
+    """Plota os pontos cardeais armazenados (lista achatada)."""
     ax = plt.gca()
 
     proxy = plt.Line2D([0], [0], marker='o', color='tab:blue',
@@ -152,6 +160,7 @@ def plot_pontos_cardeais_from_list(cardinais_flat):
 EPS = 1e-9
 
 def closest_param_t_on_segment(p, a, b):
+    """Retorna t em [0,1] tal que a + t*(b-a) é o ponto do segmento AB mais próximo de P."""
     ax, ay = a; bx, by = b; px, py = p
     vx, vy = (bx - ax), (by - ay)
     wx, wy = (px - ax), (py - ay)
@@ -164,15 +173,20 @@ def closest_param_t_on_segment(p, a, b):
     return t
 
 def dist_point_to_segment(p, a, b):
+    """Distância do ponto P ao segmento AB e o parâmetro t do ponto mais próximo."""
     t = closest_param_t_on_segment(p, a, b)
     cx = a[0] + t*(b[0]-a[0])
     cy = a[1] + t*(b[1]-a[1])
     return math.hypot(p[0]-cx, p[1]-cy), t
 
-def segment_intersects_circle(a, b, center, r, *,
+def segment_intersects_circle(a, b, center, r, *, 
                               allow_touch_at_endpoint_for=None,
                               tol=1e-7):
-   
+    """
+    True se o segmento AB invade a área do círculo (dist < r) ou encosta (dist == r)
+    em ponto INTERNO do segmento (0<t<1). Encostar no endpoint é permitido SOMENTE
+    quando esse endpoint pertence ao círculo 'allow_touch_at_endpoint_for' (índice).
+    """
     d, t = dist_point_to_segment(center, a, b)
 
     # Interseção 'dura' (atravessa interior)
@@ -206,9 +220,22 @@ def segment_intersects_circle(a, b, center, r, *,
 # ======================= Construção do grafo de visibilidade =======================
 
 def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circulo, cardinais_flat):
-    vertices = [inicio, fim] + list(cardinais_flat)
-    owners = [None, None]
+    """
+    Retorna:
+      - vertices: [(x,y), ...]  (start, goal e cardinais)
+      - owners:   [None|-1|idx_circulo, ...]  (dono de cada vértice; None para start/goal)
+      - edges:    [(i,j), ...] pares de índices de vertices com aresta válida
 
+    Regras:
+      - Proíbe ligar dois pontos do MESMO círculo (o segmento seria um acorde que atravessa o interior).
+      - Proíbe atravessar qualquer círculo.
+      - Permite tocar o círculo apenas no endpoint que pertence a ele (o próprio ponto cardeal).
+    """
+    # Monta lista de vértices e "donos"
+    vertices = [inicio, fim] + list(cardinais_flat)
+    owners = [None, None]    # start e goal não pertencem a círculo
+
+    # Mapa rápido de ponto -> índice do círculo dono
     owner_map = {}
     for item in cardinais_por_circulo:
         ci = item['idx']
@@ -219,21 +246,18 @@ def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circul
         owners.append(owner_map.get(pt, None))
 
     n = len(vertices)
-    edges = []              # só válidas
-    total_candidates = 0    # todas, válidas ou não
+    edges = []
 
     for i in range(n):
         for j in range(i+1, n):
             a = vertices[i]; b = vertices[j]
             owner_i = owners[i]; owner_j = owners[j]
 
-            # 1) Mesmo círculo (já é inválida)
+            # 1) Evita ligar dois pontos do MESMO círculo
             if (owner_i is not None) and (owner_i == owner_j):
-                total_candidates += 1
                 continue
 
-            # 2) Conta como candidata e verifica interseções
-            total_candidates += 1
+            # 2) Checa interseção com todos os círculos
             ok = True
             for k, c in enumerate(centers):
                 allow = {
@@ -248,10 +272,7 @@ def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circul
             if ok:
                 edges.append((i, j))
 
-    print(f"Arestas candidatas (todas): {total_candidates}")
-    print(f"Arestas válidas: {len(edges)}")
     return vertices, owners, edges
-
 
 
 # ======================= Plot das arestas =======================
@@ -264,39 +285,119 @@ def plot_edges(vertices, edges):
         ax.plot([x1, x2], [y1, y2], linewidth=0.8, alpha=0.6)
 
 
+# ======================= Busca no grafo (DFS) =======================
+
+def edges_to_adj_list(n, edges):
+    """Converte a lista de arestas para uma lista de adjacência."""
+    adj = {i: [] for i in range(n)}
+    for i, j in edges:
+        adj[i].append(j)
+        adj[j].append(i)
+    return adj
+
+def dfs_find_path(start_node, end_node, adj):
+    """
+    Encontra um caminho entre start_node e end_node usando DFS (iterativo).
+    Retorna uma lista de índices de vértices, ou None se não houver caminho.
+    """
+    if start_node == end_node:
+        return [start_node]
+
+    # Pilha para o DFS: (nó atual, caminho até agora)
+    stack = [(start_node, [start_node])]
+    # Nós visitados para evitar ciclos
+    visited = {start_node}
+
+    while stack:
+        current_node, path = stack.pop()
+
+        if current_node == end_node:
+            return path  # Caminho encontrado
+
+        # Adiciona vizinhos não visitados à pilha
+        for neighbor in reversed(adj.get(current_node, [])):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                new_path = path + [neighbor]
+                stack.append((neighbor, new_path))
+
+    return None # Caminho não encontrado
+
+# ======================= Plot do caminho =======================
+
+def plot_path(vertices, path):
+    """Desenha o caminho encontrado no mapa."""
+    if not path:
+        return
+    ax = plt.gca()
+    # Desenha o caminho
+    for i in range(len(path) - 1):
+        p1_idx, p2_idx = path[i], path[i+1]
+        x1, y1 = vertices[p1_idx]
+        x2, y2 = vertices[p2_idx]
+        ax.plot([x1, x2], [y1, y2], color='red', linewidth=2.5, zorder=5)
+
+    # Destaca os nós do caminho
+    path_points_x = [vertices[i][0] for i in path]
+    path_points_y = [vertices[i][1] for i in path]
+    ax.scatter(path_points_x, path_points_y, c='red', s=40, zorder=6, label='Caminho')
+
+    # Atualiza a legenda para incluir o caminho
+    handles, labels = ax.get_legend_handles_labels()
+    if 'Caminho' not in labels:
+        proxy = plt.Line2D([0], [0], color='red', lw=2.5, label='Caminho')
+        handles.append(proxy)
+        ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.02, 0.5))
+
+
 # ======================= Main =======================
 
 def main():
-    total_clearance = MARGIN_FROM_POINTS
-
-    # Apenas para ver start/goal primeiro
-    plot_map_and_points(BOUNDS, INICIO, FIM, "Mapa: apenas pontos")
+    # --- Plot 1: Start and End points ---
+    plot_map_and_points(BOUNDS, INICIO, FIM, "Passo 1: Pontos de Início e Fim")
     plt.show()
 
+    # --- Generation ---
+    total_clearance = MARGIN_FROM_POINTS
     centers = generate_random_centers(
         NUM_OBS, RADIUS, BOUNDS, INICIO, FIM,
         total_clearance,
-        border_gap=BORDER_GAP,
+        border_gap=6,
         max_tries=MAX_TRIES,
-        seed=42,
+        seed=None,
     )
     print(f"{len(centers)} centros gerados.")
 
     cardinais_por_circulo, cardinais_flat = generate_cardinal_points(centers, RADIUS)
-    print(f"{len(cardinais_flat)} pontos cardeais armazenados "
-          f"({len(cardinais_por_circulo)} círculos × 4 pontos cada).")
+    print(f"{len(cardinais_flat)} pontos cardeais armazenados.")
 
-    # ===== Grafo de visibilidade =====
     vertices, owners, edges = build_visibility_graph(
         BOUNDS, INICIO, FIM, centers, RADIUS, cardinais_por_circulo, cardinais_flat
     )
-    print(f"Arestas válidas: {len(edges)}")
+    print(f"Vértices: {len(vertices)}, Arestas válidas: {len(edges)}")
 
-    # Plot final
-    plot_map_and_points(BOUNDS, INICIO, FIM, "Mapa: obstáculos, cardinais e arestas válidas")
+    # --- Plot 2: Obstacles and Visibility Graph ---
+    plot_map_and_points(BOUNDS, INICIO, FIM, "Passo 2: Obstáculos e Grafo de Visibilidade")
     plot_obstacles(centers, RADIUS)
     plot_pontos_cardeais_from_list(cardinais_flat)
     plot_edges(vertices, edges)
+    plt.show()
+
+    # --- Pathfinding ---
+    adj_list = edges_to_adj_list(len(vertices), edges)
+    path = dfs_find_path(0, 1, adj_list)
+
+    # --- Plot 3: Final Path ---
+    plot_map_and_points(BOUNDS, INICIO, FIM, "Passo 3: Rota Final Encontrada (DFS)")
+    plot_obstacles(centers, RADIUS)
+    plot_pontos_cardeais_from_list(cardinais_flat)
+    plot_edges(vertices, edges)
+    
+    if path:
+        plot_path(vertices, path)
+        print(f"Caminho encontrado com {len(path)} nós.")
+    else:
+        print("Nenhum caminho encontrado.")
     plt.show()
 
 
