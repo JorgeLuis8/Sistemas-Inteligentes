@@ -58,7 +58,7 @@ def valid_center(candidate, centers, r, bounds, inicio, fim,
 
 def generate_random_centers(n, r, bounds, inicio, fim,
                             clearance_pts, min_gap_between_obs=0.0,
-                            border_gap=0.0, max_tries=10000, seed=42):
+                            border_gap=0.0, max_tries=10000, seed=None):
     if seed is not None:
         random.seed(seed)
 
@@ -282,8 +282,7 @@ def plot_edges(vertices, edges):
     for (i, j) in edges:
         x1, y1 = vertices[i]
         x2, y2 = vertices[j]
-        ax.plot([x1, x2], [y1, y2], linewidth=0.8, alpha=0.6)
-
+        ax.plot([x1, x2], [y1, y2], color="black", linewidth=0.8)
 
 # ======================= Busca no grafo (DFS) =======================
 
