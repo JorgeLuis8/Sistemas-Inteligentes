@@ -178,7 +178,6 @@ def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circul
     return vertices, owners, edges
 
 
-# ======================= Plot das arestas =======================
 
 def plot_edges(vertices, edges):
     ax = plt.gca()
@@ -211,7 +210,6 @@ def dfs_find_path(start_node, end_node, adj):
     return None
 
 
-# ======================= Plot do caminho =======================
 
 def plot_path(vertices, path):
     if not path:
