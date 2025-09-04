@@ -4,10 +4,9 @@ import matplotlib.pyplot as plt
 from collections import deque
 
 
-# ======================= Configurações do mapa e obstáculos =======================
 
-BOUNDS = (0, 100, 0, 60)   # Limites do mapa
-NUM_OBS = 10               # Quantidade de obstáculos
+BOUNDS = (0, 100, 0, 100)   # Limites do mapa
+NUM_OBS = 100             # Quantidade de obstáculos
 RADIUS  = 3                # Raio dos obstáculos
 MARGIN_FROM_POINTS = 6.0   # Distância mínima de início/fim até obstáculo
 MAX_TRIES = 50_000         # Tentativas máximas de geração
@@ -16,7 +15,6 @@ INICIO = (BOUNDS[0] + MARGEM_PONTOS, BOUNDS[3] - MARGEM_PONTOS)
 FIM    = (BOUNDS[1] - MARGEM_PONTOS, BOUNDS[2] + MARGEM_PONTOS)
 
 
-# ======================= Utilidades =======================
 
 def dist(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
@@ -115,7 +113,6 @@ def plot_pontos_cardeais_from_list(cardinais_flat):
         ax.legend(handles=[proxy], loc='upper right')
 
 
-# ======================= Geometria =======================
 
 EPS = 1e-9
 
@@ -155,7 +152,6 @@ def segment_intersects_circle(a, b, center, r, *,
     return False
 
 
-# ======================= Grafo de Visibilidade =======================
 
 def build_visibility_graph(bounds, inicio, fim, centers, r, cardinais_por_circulo, cardinais_flat):
     vertices = [inicio, fim] + list(cardinais_flat)
@@ -192,7 +188,6 @@ def plot_edges(vertices, edges):
         ax.plot([x1, x2], [y1, y2], color="black", linewidth=0.8)
 
 
-# ======================= DFS =======================
 
 def edges_to_adj_list(n, edges):
     adj = {i: [] for i in range(n)}
@@ -202,13 +197,12 @@ def edges_to_adj_list(n, edges):
     return adj
 
 def dfs_find_path(start_node, end_node, adj):
-    if start_node == end_node:
-        return [start_node]
     stack = [(start_node, [start_node])]
     visited = {start_node}
     while stack:
         current_node, path = stack.pop()
         if current_node == end_node:
+            print(path)
             return path
         for neighbor in reversed(adj.get(current_node, [])):
             if neighbor not in visited:
@@ -236,14 +230,11 @@ def plot_path(vertices, path):
                   loc='center left', bbox_to_anchor=(1.02, 0.5))
 
 
-# ======================= Main =======================
 
 def main():
-    # Passo 1
     plot_map_and_points(BOUNDS, INICIO, FIM, "Passo 1: Pontos de Início e Fim")
     plt.show()
 
-    # Geração
     centers = generate_random_centers(NUM_OBS, RADIUS, BOUNDS, INICIO, FIM,
                                       MARGIN_FROM_POINTS,
                                       max_tries=MAX_TRIES)
