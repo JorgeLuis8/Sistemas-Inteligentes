@@ -1,89 +1,75 @@
-# Instalar se faltar:
-# pip install ucimlrepo pandas scikit-learn imbalanced-learn
-
-from ucimlrepo import fetch_ucirepo
 import pandas as pd
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+import numpy as np
+import matplotlib.pyplot as plt
+from ucimlrepo import fetch_ucirepo
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import classification_report, confusion_matrix
-from imblearn.over_sampling import SMOTE
+from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay, classification_report
 
-# ============================================================
-# 1) CARREGAR DATASET DA UCI
-# ============================================================
+# --- CARREGAMENTO ---
+print("Baixando dados...")
+dataset = fetch_ucirepo(id=451)
+X = dataset.data.features
+y = dataset.data.targets['Classification'].replace({1: 0, 2: 1}) # 0: Não tem, 1: Tem
 
-data = fetch_ucirepo(id=451)  # Breast Cancer Coimbra
-X = data.data.features
-y = data.data.targets
-
-df = pd.DataFrame(X, columns=data.data.feature_names)
-df["Classification"] = y
-
-print("\nContagem das classes:")
-print(df["Classification"].value_counts(), "\n")
-
-X = df.drop("Classification", axis=1)
-y = df["Classification"]
-
-# ============================================================
-# 2) DEFINIR MLP "CAMPEÃ" — MELHORES PARÂMETROS ACHADOS
-# ============================================================
-
-mlp_pipeline = Pipeline([
-    ("scaler", StandardScaler()),
-    ("mlp", MLPClassifier(
-        hidden_layer_sizes=(128, 64, 32),
-        activation="tanh",
-        learning_rate="constant",
-        alpha=0.0001,
-        max_iter=3000,
-        random_state=42
-    ))
-])
-
-# ============================================================
-# 3) VALIDATION: 5-FOLD STRATIFIED CROSS-VALIDATION
-# ============================================================
-
-cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-
-scores_acc = cross_val_score(mlp_pipeline, X, y, cv=cv, scoring="accuracy")
-scores_f1  = cross_val_score(mlp_pipeline, X, y, cv=cv, scoring="f1_macro")
-
-print("===== VALIDAÇÃO CRUZADA (5-fold) =====")
-print("Acurácias:", scores_acc)
-print("Acurácia média:", scores_acc.mean())
-print("\nF1_macro:", scores_f1)
-print("F1_macro médio:", scores_f1.mean())
-print("=======================================\n")
-
-# ============================================================
-# 4) TESTE FINAL — TREINO/TESTE + SMOTE NO TREINO
-# ============================================================
-
+# ==============================================================================
+# PASSO 1: HOLD-OUT (Divisão de Treino e Teste)
+# ==============================================================================
+# O Hold-out separa uma fatia dos dados que o modelo NUNCA vai ver durante o treino.
+# Usamos 20% para teste (test_size=0.2) e 80% para treino.
+# stratify=y: Garante que a proporção de doentes seja a mesma no treino e no teste.
+print("Aplicando Hold-out...")
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42,
+    X, y, 
+    test_size=0.2, 
+    random_state=0, 
     stratify=y
 )
 
-# Balancear SOMENTE o treino
-sm = SMOTE(random_state=42)
-X_train_res, y_train_res = sm.fit_resample(X_train, y_train)
+print(f" -> Tamanho do Treino: {len(X_train)} amostras")
+print(f" -> Tamanho do Teste (Hold-out): {len(X_test)} amostras")
 
-# Treinar modelo final
-mlp_pipeline.fit(X_train_res, y_train_res)
+# ==============================================================================
+# PASSO 2: NORMALIZAÇÃO (Padronização)
+# ==============================================================================
+# Redes Neurais não funcionam bem com números de escalas diferentes (ex: Glicose 100 vs Insulina 5).
+# O StandardScaler transforma tudo para ter média 0 e desvio padrão 1.
+print("Normalizando os dados...")
 
-# Predição no teste
-y_pred = mlp_pipeline.predict(X_test)
+scaler = StandardScaler()
 
-print("===== AVALIAÇÃO NO CONJUNTO DE TESTE =====")
-print("\nMatriz de confusão:")
-print(confusion_matrix(y_test, y_pred))
+# ATENÇÃO: O .fit (aprender a média) é feito SÓ no treino para evitar vazamento de dados!
+X_train_scaled = scaler.fit_transform(X_train) 
 
-print("\nRelatório de classificação:")
-print(classification_report(y_test, y_pred))
-print("===========================================")
+# No teste, nós apenas aplicamos (.transform) a régua que aprendemos no treino
+X_test_scaled = scaler.transform(X_test)
+
+# ==============================================================================
+# TREINAMENTO E AVALIAÇÃO
+# ==============================================================================
+mlp = MLPClassifier(
+    hidden_layer_sizes=(100, 50), activation='tanh', solver='lbfgs',
+    alpha=0.5, max_iter=5000, random_state=42
+)
+
+print("Treinando MLP...")
+mlp.fit(X_train_scaled, y_train)
+
+# Testando na parte que separamos (Hold-out)
+y_pred = mlp.predict(X_test_scaled)
+acc = accuracy_score(y_test, y_pred)
+
+print(f"\n--- Acurácia no Hold-out: {acc:.2%} ---")
+print(classification_report(y_test, y_pred, target_names=['Não tem Câncer', 'Tem Câncer']))
+
+# Gráfico
+fig, ax = plt.subplots(figsize=(6, 5))
+ConfusionMatrixDisplay.from_predictions(
+    y_test, y_pred, 
+    display_labels=['Não tem', 'Tem'], 
+    cmap='Blues', ax=ax, colorbar=False
+)
+ax.set_title("Resultado no Conjunto de Teste (Hold-out)")
+plt.grid(False)
+plt.show()
