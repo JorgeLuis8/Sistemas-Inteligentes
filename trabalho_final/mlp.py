@@ -5,7 +5,10 @@ from ucimlrepo import fetch_ucirepo
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    ConfusionMatrixDisplay, classification_report
+)
 
 # --- CARREGAMENTO ---
 print("Baixando dados...")
@@ -58,18 +61,39 @@ mlp.fit(X_train_scaled, y_train)
 
 # Testando na parte que separamos (Hold-out)
 y_pred = mlp.predict(X_test_scaled)
-acc = accuracy_score(y_test, y_pred)
 
-print(f"\n--- Acurácia no Hold-out: {acc:.2%} ---")
+# ==============================================================================
+# MÉTRICAS DE AVALIAÇÃO
+# ==============================================================================
+print("\n" + "="*70)
+print("MÉTRICAS DE DESEMPENHO NO CONJUNTO DE TESTE (HOLD-OUT)")
+print("="*70)
+
+# Métricas básicas
+acc = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+
+print(f"Acurácia (Accuracy):            {acc:.4f} ({acc*100:.2f}%)")
+print(f"Precisão (Precision):           {precision:.4f} ({precision*100:.2f}%)")
+print(f"Revocação (Recall/Sensitivity): {recall:.4f} ({recall*100:.2f}%)")
+print(f"F1-Score:                       {f1:.4f}")
+print("="*70)
+
+print("\nRelatório de Classificação Detalhado:")
 print(classification_report(y_test, y_pred, target_names=['Não tem Câncer', 'Tem Câncer']))
 
-# Gráfico
-fig, ax = plt.subplots(figsize=(6, 5))
+# Gráfico - Matriz de Confusão
+fig, ax = plt.subplots(figsize=(7, 6))
+
 ConfusionMatrixDisplay.from_predictions(
     y_test, y_pred, 
     display_labels=['Não tem Câncer', 'Tem Câncer'], 
     cmap='Blues', ax=ax, colorbar=False
 )
-ax.set_title("Resultado no Conjunto de Teste (Hold-out)")
-plt.grid(False)
+ax.set_title("Matriz de Confusão - Hold-out", fontsize=12, fontweight='bold')
+ax.grid(False)
+
+plt.tight_layout()
 plt.show()
