@@ -67,7 +67,7 @@ print(classification_report(y_test, y_pred, target_names=['Não tem Câncer', 'T
 fig, ax = plt.subplots(figsize=(6, 5))
 ConfusionMatrixDisplay.from_predictions(
     y_test, y_pred, 
-    display_labels=['Não tem', 'Tem'], 
+    display_labels=['Não tem Câncer', 'Tem Câncer'], 
     cmap='Blues', ax=ax, colorbar=False
 )
 ax.set_title("Resultado no Conjunto de Teste (Hold-out)")
